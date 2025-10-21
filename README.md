@@ -1,3 +1,5 @@
+[![PyPI Latest Release](https://img.shields.io/pypi/v/django-user-activity.svg)](https://pypi.org/project/django-user-activity/) [![PyPI Downloads](https://static.pepy.tech/badge/django-user-activity)](https://pepy.tech/projects/django-user-activity) [![License - MIT](https://img.shields.io/pypi/l/django-user-activity.svg)](https://github.com/rkpust/django-user-activity/blob/master/LICENSE) [![Open Source](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://opensource.org/)
+
 # django-user-activity
 
 A reusable Django app for tracking user activity on web application. This app logs user actions like url, referer, method, ip, user_agent and timestamp. It’s designed to be reusable, easy to integrate, and can be customized to fit your needs.
