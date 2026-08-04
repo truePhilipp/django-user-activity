@@ -7,14 +7,26 @@ def engagement(request):
 
     Lets a consuming project drop in `{% include "activity/engagement_snippet.html" %}`
     instead of hand-wiring the endpoint url and settings into its own base template.
-    Returns an empty dict (snippet renders nothing) if tracking is disabled, the user
-    isn't authenticated, or the project never wired `activity.urls` into its URLconf.
+    Returns an empty dict (snippet renders nothing, engagement.js never loads, no beacon is
+    ever attempted) if tracking is disabled, the user isn't authenticated, the user is in
+    `ACTIVITY_USER_BLACKLIST`, the current page matches `ACTIVITY_PATH_PREFIX_BLACKLIST`, or
+    the project never wired `activity.urls` into its URLconf. Same two blacklist settings
+    `ActivityMiddleware` already honors for the separate `Activity` request log.
     """
     if not getattr(settings, 'ACTIVITY_ENGAGEMENT_ENABLED', True):
         return {}
 
     user = getattr(request, 'user', None)
     if user is None or not user.is_authenticated:
+        return {}
+
+    user_blacklist = getattr(settings, 'ACTIVITY_USER_BLACKLIST', [])
+    identifier = getattr(user, user.USERNAME_FIELD, None)
+    if identifier in user_blacklist:
+        return {}
+
+    path_prefix_blacklist = getattr(settings, 'ACTIVITY_PATH_PREFIX_BLACKLIST', [])
+    if any(request.path.startswith(prefix) for prefix in path_prefix_blacklist):
         return {}
 
     try:
@@ -26,3 +38,21 @@ def engagement(request):
         'ACTIVITY_ENGAGEMENT_URL': engagement_url,
         'ACTIVITY_IDLE_TIMEOUT_SECONDS': getattr(settings, 'ACTIVITY_IDLE_TIMEOUT_SECONDS', 30),
     }
+
+
+def debug_sidebar(request):
+    """Expose whether the developer debug sidebar should render for this request.
+
+    Two independent gates: the server-wide `ACTIVITY_DEBUG_SIDEBAR_ENABLED` setting, and
+    `request.user.is_staff`. The sidebar browses *other users'* full interaction history
+    (including typed field values), so the env-var flag alone must never be enough on its
+    own to expose it to every logged-in user in a shared dev/staging environment.
+    """
+    if not getattr(settings, 'ACTIVITY_DEBUG_SIDEBAR_ENABLED', False):
+        return {}
+
+    user = getattr(request, 'user', None)
+    if user is None or not user.is_authenticated or not user.is_staff:
+        return {}
+
+    return {'ACTIVITY_DEBUG_SIDEBAR_ENABLED': True}

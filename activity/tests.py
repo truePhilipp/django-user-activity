@@ -1,10 +1,13 @@
 import json
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth.models import AnonymousUser, User
 from django.test import RequestFactory, TestCase, override_settings
-from django.urls import NoReverseMatch
+from django.urls import NoReverseMatch, reverse
+from django.utils import timezone
 
+from . import services
 from .context_processors import engagement
 from .middleware import ActivityMiddleware
 from .models import Activity, ElementInteraction, PageEngagement
@@ -375,3 +378,183 @@ class EngagementContextProcessorTests(TestCase):
 
         with patch('activity.context_processors.reverse', side_effect=NoReverseMatch):
             self.assertEqual(engagement(request), {})
+
+    @override_settings(ACTIVITY_USER_BLACKLIST=['testuser'])
+    def test_empty_for_blacklisted_user(self):
+        request = self.factory.get('/dashboard/')
+        request.user = self.user
+
+        self.assertEqual(engagement(request), {})
+
+    @override_settings(ACTIVITY_PATH_PREFIX_BLACKLIST=['/admin/'])
+    def test_empty_for_blacklisted_path_prefix(self):
+        request = self.factory.get('/admin/settings/')
+        request.user = self.user
+
+        self.assertEqual(engagement(request), {})
+
+
+class SessionServicesTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='testuser', password='password')
+
+    def test_list_sessions_groups_by_session_key(self):
+        now = timezone.now()
+        engagement_a1 = PageEngagement.objects.create(
+            user=self.user, url='/a/', session_key='session-1', visit_id='visit-a1', started_at=now,
+        )
+        PageEngagement.objects.create(
+            user=self.user, url='/b/', session_key='session-1', visit_id='visit-a2',
+            started_at=now + timedelta(seconds=5),
+        )
+        ElementInteraction.objects.create(
+            engagement=engagement_a1, event_type=ElementInteraction.CLICK, xpath='//*[@id="x"]',
+            occurred_at=now + timedelta(seconds=1),
+        )
+        PageEngagement.objects.create(
+            user=self.user, url='/c/', session_key='session-2', visit_id='visit-b1',
+            started_at=now + timedelta(seconds=10),
+        )
+
+        summaries = {s.session_key: s for s in services.list_sessions()}
+
+        self.assertEqual(summaries['session-1'].page_count, 2)
+        self.assertEqual(summaries['session-1'].interaction_count, 1)
+        self.assertEqual(summaries['session-1'].user, self.user)
+        self.assertEqual(summaries['session-1'].start_url, '/a/')
+        self.assertEqual(summaries['session-2'].page_count, 1)
+        self.assertEqual(summaries['session-2'].interaction_count, 0)
+        self.assertEqual(summaries['session-2'].start_url, '/c/')
+
+    def test_list_sessions_orders_most_recent_first(self):
+        now = timezone.now()
+        PageEngagement.objects.create(user=self.user, url='/a/', session_key='older', visit_id='v1', started_at=now)
+        PageEngagement.objects.create(
+            user=self.user, url='/b/', session_key='newer', visit_id='v2', started_at=now + timedelta(minutes=1),
+        )
+
+        session_keys = [s.session_key for s in services.list_sessions()]
+
+        self.assertEqual(session_keys, ['newer', 'older'])
+
+    def test_get_session_steps_merges_visit_and_interaction_steps_in_order(self):
+        now = timezone.now()
+        engagement = PageEngagement.objects.create(
+            user=self.user, url='/dashboard/', session_key='session-1', visit_id='visit-1', started_at=now,
+        )
+        ElementInteraction.objects.create(
+            engagement=engagement, event_type=ElementInteraction.CLICK, xpath='//*[@id="submit"]',
+            occurred_at=now + timedelta(seconds=5),
+        )
+
+        steps = services.get_session_steps('session-1')
+
+        self.assertEqual([s.kind for s in steps], [services.VISIT, ElementInteraction.CLICK])
+        self.assertEqual(steps[0].url, '/dashboard/')
+        self.assertEqual(steps[1].xpath, '//*[@id="submit"]')
+
+    def test_get_session_steps_interleaves_concurrent_visits_by_timestamp(self):
+        now = timezone.now()
+        engagement_a = PageEngagement.objects.create(
+            user=self.user, url='/a/', session_key='session-1', visit_id='visit-a', started_at=now,
+        )
+        engagement_b = PageEngagement.objects.create(
+            user=self.user, url='/b/', session_key='session-1', visit_id='visit-b',
+            started_at=now + timedelta(seconds=5),
+        )
+        ElementInteraction.objects.create(
+            engagement=engagement_a, event_type=ElementInteraction.CLICK, xpath='//*[@id="a"]',
+            occurred_at=now + timedelta(seconds=10),
+        )
+        ElementInteraction.objects.create(
+            engagement=engagement_b, event_type=ElementInteraction.CLICK, xpath='//*[@id="b"]',
+            occurred_at=now + timedelta(seconds=15),
+        )
+
+        # A naive per-visit concatenation would yield ['/a/', '/a/', '/b/', '/b/'] here, since
+        # engagement_a's own click (at +10s) would be emitted right after its visit step even
+        # though engagement_b's visit (at +5s) happened earlier in wall-clock time.
+        steps = services.get_session_steps('session-1')
+
+        self.assertEqual([s.url for s in steps], ['/a/', '/b/', '/a/', '/b/'])
+
+
+class DebugSidebarViewTests(TestCase):
+    def setUp(self):
+        self.staff_user = User.objects.create_user(username='staffuser', password='password', is_staff=True)
+        self.regular_user = User.objects.create_user(username='regularuser', password='password')
+
+    @override_settings(ACTIVITY_DEBUG_SIDEBAR_ENABLED=False)
+    def test_debug_sessions_404_when_disabled(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(reverse('activity:debug_sessions'))
+
+        self.assertEqual(response.status_code, 404)
+
+    @override_settings(ACTIVITY_DEBUG_SIDEBAR_ENABLED=True)
+    def test_debug_sessions_forbidden_for_non_staff(self):
+        self.client.force_login(self.regular_user)
+
+        response = self.client.get(reverse('activity:debug_sessions'))
+
+        self.assertEqual(response.status_code, 403)
+
+    @override_settings(ACTIVITY_DEBUG_SIDEBAR_ENABLED=True)
+    def test_debug_sessions_forbidden_for_anonymous(self):
+        response = self.client.get(reverse('activity:debug_sessions'))
+
+        self.assertEqual(response.status_code, 403)
+
+    @override_settings(ACTIVITY_DEBUG_SIDEBAR_ENABLED=True)
+    def test_debug_sessions_lists_recorded_sessions_for_staff(self):
+        PageEngagement.objects.create(
+            user=self.staff_user, url='/dashboard/', session_key='session-a', visit_id='visit-1',
+            started_at=timezone.now(),
+        )
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(reverse('activity:debug_sessions'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'staffuser')
+        self.assertContains(response, 'data-session-key="session-a"')
+        self.assertContains(response, 'data-start-url="/dashboard/"')
+
+    @override_settings(ACTIVITY_DEBUG_SIDEBAR_ENABLED=True)
+    def test_debug_session_steps_forbidden_for_non_staff(self):
+        self.client.force_login(self.regular_user)
+
+        response = self.client.get(reverse('activity:debug_session_steps', args=['session-a']))
+
+        self.assertEqual(response.status_code, 403)
+
+    @override_settings(ACTIVITY_DEBUG_SIDEBAR_ENABLED=False)
+    def test_debug_session_steps_404_when_disabled(self):
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(reverse('activity:debug_session_steps', args=['session-a']))
+
+        self.assertEqual(response.status_code, 404)
+
+    @override_settings(ACTIVITY_DEBUG_SIDEBAR_ENABLED=True)
+    def test_debug_session_steps_shows_ordered_steps_for_staff(self):
+        engagement = PageEngagement.objects.create(
+            user=self.staff_user, url='/dashboard/', session_key='session-a', visit_id='visit-1',
+            started_at=timezone.now(),
+        )
+        ElementInteraction.objects.create(
+            engagement=engagement, event_type=ElementInteraction.CLICK, xpath='//*[@id="submit"]',
+            occurred_at=timezone.now() + timedelta(seconds=1),
+        )
+        self.client.force_login(self.staff_user)
+
+        response = self.client.get(reverse('activity:debug_session_steps', args=['session-a']))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '/dashboard/')
+        self.assertContains(response, '//*[@id=&quot;submit&quot;]')
+        self.assertContains(response, 'data-step-url="/dashboard/"')
+        self.assertContains(response, 'data-step-kind="visit"')
+        self.assertContains(response, 'data-step-kind="click"')
+        self.assertContains(response, 'data-activity-debug-back')

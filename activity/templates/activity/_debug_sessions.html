@@ -1,0 +1,22 @@
+<div style="padding: 8px 12px; font-weight: 600; border-bottom: 1px solid #374151;">Recent sessions</div>
+<div>
+    {% for session in sessions %}
+        {% comment %}
+            No hx-get here on purpose: selecting a session navigates the whole page to its start
+            url (see debug_sidebar.js), not just swaps this fragment - the delegated click
+            handler reads data-session-key/data-start-url below.
+        {% endcomment %}
+        <div data-session-key="{{ session.session_key }}"
+             data-start-url="{{ session.start_url }}"
+             style="padding: 8px 12px; border-bottom: 1px solid #1f2937; cursor: pointer;">
+            <div style="font-weight: 600;">{{ session.user|default:"Unknown user" }}</div>
+            <div style="opacity: 0.7; font-size: 12px;">{{ session.started_at }}</div>
+            <div style="opacity: 0.7; font-size: 12px;">
+                {{ session.page_count }} page{{ session.page_count|pluralize }} &middot;
+                {{ session.interaction_count }} step{{ session.interaction_count|pluralize }}
+            </div>
+        </div>
+    {% empty %}
+        <div style="padding: 12px; opacity: 0.7;">No recorded sessions yet.</div>
+    {% endfor %}
+</div>

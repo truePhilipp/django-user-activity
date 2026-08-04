@@ -4,9 +4,11 @@ from datetime import datetime, timezone as dt_timezone
 from django.conf import settings
 from django.db.models import F
 from django.http import HttpResponseBadRequest, HttpResponseForbidden, HttpResponseNotFound, JsonResponse
+from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
+from . import services
 from .models import ElementInteraction, PageEngagement
 
 VALID_EVENT_TYPES = {ElementInteraction.CLICK, ElementInteraction.INPUT}
@@ -105,3 +107,31 @@ def record_engagement(request):
     ])
 
     return JsonResponse({'status': 'ok'})
+
+
+def _debug_sidebar_guard(request):
+    # The sidebar browses *other users'* full interaction history, including typed field
+    # values - the enabled flag alone must never be sufficient to see it.
+    if not getattr(settings, 'ACTIVITY_DEBUG_SIDEBAR_ENABLED', False):
+        return HttpResponseNotFound()
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return HttpResponseForbidden('Staff access required')
+    return None
+
+
+def debug_sessions(request):
+    guard = _debug_sidebar_guard(request)
+    if guard is not None:
+        return guard
+    return render(request, 'activity/_debug_sessions.html', {'sessions': services.list_sessions()})
+
+
+def debug_session_steps(request, session_key):
+    guard = _debug_sidebar_guard(request)
+    if guard is not None:
+        return guard
+    return render(
+        request,
+        'activity/_debug_session_steps.html',
+        {'session_key': session_key, 'steps': services.get_session_steps(session_key)},
+    )

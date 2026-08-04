@@ -1,0 +1,39 @@
+<div style="padding: 8px 12px; border-bottom: 1px solid #374151; display: flex; justify-content: space-between; align-items: center;">
+    {% comment %}
+        data-activity-debug-back tells debug_sidebar.js to forget the loaded session_key so a
+        later page load restores the session list instead of jumping back into these steps.
+    {% endcomment %}
+    <button data-activity-debug-back
+            hx-get="{% url 'activity:debug_sessions' %}"
+            hx-target="#activity-debug-sidebar-body"
+            hx-swap="innerHTML"
+            style="background: none; border: none; color: #93c5fd; cursor: pointer; padding: 0; font-family: inherit; font-size: inherit;">
+        &larr; Sessions
+    </button>
+    <span style="opacity: 0.6; font-size: 12px;">{{ steps|length }} step{{ steps|length|pluralize }}</span>
+</div>
+<div>
+    {% for step in steps %}
+        {% comment %}
+            data-step-url/data-step-xpath let debug_sidebar.js resolve and highlight the real
+            element on hover - but only when data-step-url matches the current page, since the
+            same xpath string can resolve to a completely different element elsewhere.
+            data-step-kind="visit" makes the row clickable to navigate straight to that page.
+        {% endcomment %}
+        <div data-step-url="{{ step.url }}" data-step-xpath="{{ step.xpath|default:'' }}" data-step-kind="{{ step.kind }}"
+             style="padding: 8px 12px; border-bottom: 1px solid #1f2937;{% if step.kind == "visit" %} cursor: pointer;{% elif step.xpath %} cursor: help;{% endif %}"
+             {% if step.xpath %}title="On {{ step.url }}"{% endif %}>
+            <div style="opacity: 0.6; font-size: 11px;">{{ step.occurred_at }}</div>
+            {% if step.kind == "visit" %}
+                <div>&#128196; Visited <code>{{ step.url }}</code></div>
+            {% elif step.kind == "click" %}
+                <div>&#128433; Clicked <code style="word-break: break-all;">{{ step.xpath }}</code></div>
+            {% else %}
+                <div>&#9000; Typed into <code style="word-break: break-all;">{{ step.xpath }}</code></div>
+                {% if step.value %}<div style="opacity: 0.8;">&quot;{{ step.value }}&quot;</div>{% endif %}
+            {% endif %}
+        </div>
+    {% empty %}
+        <div style="padding: 12px; opacity: 0.7;">No steps recorded for this session.</div>
+    {% endfor %}
+</div>
