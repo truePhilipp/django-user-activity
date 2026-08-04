@@ -11,6 +11,7 @@ A reusable Django app for tracking user activity on web application. This app lo
 - Easily integrates into any Django project.
 - Admin interface for easy viewing and management of activity data.
 - Reusable and customizable.
+- Blacklist tracking of users or path prefixes to only track relevant information.
 
 ## Requirements
 

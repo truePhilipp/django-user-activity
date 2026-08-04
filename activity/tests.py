@@ -1,4 +1,4 @@
-from django.test import TestCase, RequestFactory
+from django.test import TestCase, RequestFactory, override_settings
 from django.contrib.auth.models import AnonymousUser, User
 from .middleware import ActivityMiddleware
 from .models import Activity
@@ -62,6 +62,28 @@ class ActivityMiddlewareTests(TestCase):
 
         activity = Activity.objects.last()
         self.assertEqual(activity.ip, '192.168.1.100')
+
+    @override_settings(ACTIVITY_USER_BLACKLIST=['testuser'])
+    def test_no_activity_for_blacklisted_user(self):
+        request = self.factory.get('/dashboard/')
+        request.user = self.user
+        request.META['REMOTE_ADDR'] = '127.0.0.1'
+        request.headers = {}
+
+        self.middleware(request)
+
+        self.assertEqual(Activity.objects.count(), 0)
+
+    @override_settings(ACTIVITY_PATH_PREFIX_BLACKLIST=['/admin/'])
+    def test_no_activity_for_blacklisted_path_prefix(self):
+        request = self.factory.get('/admin/settings/')
+        request.user = self.user
+        request.META['REMOTE_ADDR'] = '127.0.0.1'
+        request.headers = {}
+
+        self.middleware(request)
+
+        self.assertEqual(Activity.objects.count(), 0)
 
     def test_logout_path_regex_variants(self):
         logout_paths = ['/logout/', '/sign-out/', '/LogOut', '/SIGN_OUT']
