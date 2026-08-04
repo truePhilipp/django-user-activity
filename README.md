@@ -94,6 +94,14 @@ The `Activity` model contains the following fields:
 
   `timestamp`: The timestamp when the action occurred.
 
+## Blacklist
+Set either setting in `settings.py` to skip logging for certain requests. Both are optional and default to an empty list.
+
+```python
+ACTIVITY_USER_BLACKLIST = ['admin']           # skip requests from these users (matched on USERNAME_FIELD)
+ACTIVITY_PATH_PREFIX_BLACKLIST = ['/admin/']  # skip requests whose path starts with these prefixes
+```
+
 ## Admin Interface
 You can view, filter, and search user activity data in the Django Admin Interface by visiting `/admin` path. Here, you will see `Activities` option in the left side. You will
 - see those field as list. <br> `user`, `url`, `referer`, `method`, `ip`, `user_agent`, `timestamp` <br>
