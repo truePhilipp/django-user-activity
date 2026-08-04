@@ -1,0 +1,7 @@
+{% load static %}{% if ACTIVITY_ENGAGEMENT_URL %}
+<script>
+    window.ACTIVITY_ENGAGEMENT_URL = "{{ ACTIVITY_ENGAGEMENT_URL }}";
+    window.ACTIVITY_IDLE_TIMEOUT_SECONDS = {{ ACTIVITY_IDLE_TIMEOUT_SECONDS }};
+</script>
+<script src="{% static "activity/engagement.js" %}" defer></script>
+{% endif %}
