@@ -70,12 +70,10 @@ MIDDLEWARE = [
 
 Run migrations to set up the necessary database tables:
 ```python
-    python manage.py makemigrations
     python manage.py migrate
 ```
-Or, you can run these commands for further clarification.
+Or, you can run this command for further clarification.
 ```python
-    python manage.py makemigrations activity
     python manage.py migrate activity 0001
 ```
 
