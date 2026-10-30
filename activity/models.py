@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from solo.models import SingletonModel
 
 # Create your models here.
 class Activity(models.Model):
@@ -74,3 +75,17 @@ class ElementInteraction(models.Model):
         verbose_name = 'Element Interaction'
         verbose_name_plural = 'Element Interactions'
         ordering = ['occurred_at']
+
+
+class ActivitySettings(SingletonModel):
+    debug_sidebar_enabled = models.BooleanField(
+        default=False,
+        help_text='Show staff users the debug sidebar, which browses every recorded session including typed field values.',
+    )
+
+    def __str__(self):
+        return 'Activity Settings'
+
+    class Meta:
+        db_table = 'activity_settings'
+        verbose_name = 'Activity Settings'

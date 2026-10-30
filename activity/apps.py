@@ -39,12 +39,4 @@ def check_activity_settings(app_configs, **kwargs):
             id='activity.E003',
         ))
 
-    debug_sidebar_enabled = getattr(settings, 'ACTIVITY_DEBUG_SIDEBAR_ENABLED', False)
-    if not isinstance(debug_sidebar_enabled, bool):
-        errors.append(Error(
-            'ACTIVITY_DEBUG_SIDEBAR_ENABLED must be a bool.',
-            obj='settings.ACTIVITY_DEBUG_SIDEBAR_ENABLED',
-            id='activity.E004',
-        ))
-
     return errors

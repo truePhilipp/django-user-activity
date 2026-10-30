@@ -9,7 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from . import services
-from .models import ElementInteraction, PageEngagement
+from .models import ActivitySettings, ElementInteraction, PageEngagement
 
 VALID_EVENT_TYPES = {ElementInteraction.CLICK, ElementInteraction.INPUT}
 
@@ -112,7 +112,7 @@ def record_engagement(request):
 def _debug_sidebar_guard(request):
     # The sidebar browses *other users'* full interaction history, including typed field
     # values - the enabled flag alone must never be sufficient to see it.
-    if not getattr(settings, 'ACTIVITY_DEBUG_SIDEBAR_ENABLED', False):
+    if not ActivitySettings.get_solo().debug_sidebar_enabled:
         return HttpResponseNotFound()
     if not request.user.is_authenticated or not request.user.is_staff:
         return HttpResponseForbidden('Staff access required')

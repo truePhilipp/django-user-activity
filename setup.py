@@ -7,6 +7,7 @@ setup(
     include_package_data=True,
     install_requires=[
         'django',
+        'django-solo>=2.5',
     ],
     author='Md. Rezaul Karim',
     author_email='rezaul.cse.pust17@gamil.com',

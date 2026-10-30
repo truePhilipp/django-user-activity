@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.urls import NoReverseMatch, reverse
 
+from .models import ActivitySettings
+
 
 def engagement(request):
     """Expose the engagement beacon URL (and its config) to every template.
@@ -41,18 +43,12 @@ def engagement(request):
 
 
 def debug_sidebar(request):
-    """Expose whether the developer debug sidebar should render for this request.
-
-    Two independent gates: the server-wide `ACTIVITY_DEBUG_SIDEBAR_ENABLED` setting, and
-    `request.user.is_staff`. The sidebar browses *other users'* full interaction history
-    (including typed field values), so the env-var flag alone must never be enough on its
-    own to expose it to every logged-in user in a shared dev/staging environment.
-    """
-    if not getattr(settings, 'ACTIVITY_DEBUG_SIDEBAR_ENABLED', False):
-        return {}
-
+    """Expose whether the developer debug sidebar should render for this request."""
     user = getattr(request, 'user', None)
     if user is None or not user.is_authenticated or not user.is_staff:
+        return {}
+
+    if not ActivitySettings.get_solo().debug_sidebar_enabled:
         return {}
 
     return {'ACTIVITY_DEBUG_SIDEBAR_ENABLED': True}

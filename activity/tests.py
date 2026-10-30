@@ -8,9 +8,9 @@ from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 
 from . import services
-from .context_processors import engagement
+from .context_processors import debug_sidebar, engagement
 from .middleware import ActivityMiddleware
-from .models import Activity, ElementInteraction, PageEngagement
+from .models import Activity, ActivitySettings, ElementInteraction, PageEngagement
 from .views import record_engagement
 
 # Create your tests here.
@@ -479,12 +479,35 @@ class SessionServicesTests(TestCase):
         self.assertEqual([s.url for s in steps], ['/a/', '/b/', '/a/', '/b/'])
 
 
+def _enable_debug_sidebar():
+    activity_settings = ActivitySettings.get_solo()
+    activity_settings.debug_sidebar_enabled = True
+    activity_settings.save()
+
+
+class DebugSidebarContextProcessorTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.staff_user = User.objects.create_user(username='staffuser', password='password', is_staff=True)
+        self.regular_user = User.objects.create_user(username='regularuser', password='password')
+
+    def test_shows_sidebar_only_to_staff_once_enabled_in_admin_settings(self):
+        request = self.factory.get('/dashboard/')
+        request.user = self.staff_user
+        self.assertEqual(debug_sidebar(request), {})
+
+        _enable_debug_sidebar()
+
+        self.assertEqual(debug_sidebar(request), {'ACTIVITY_DEBUG_SIDEBAR_ENABLED': True})
+        request.user = self.regular_user
+        self.assertEqual(debug_sidebar(request), {})
+
+
 class DebugSidebarViewTests(TestCase):
     def setUp(self):
         self.staff_user = User.objects.create_user(username='staffuser', password='password', is_staff=True)
         self.regular_user = User.objects.create_user(username='regularuser', password='password')
 
-    @override_settings(ACTIVITY_DEBUG_SIDEBAR_ENABLED=False)
     def test_debug_sessions_404_when_disabled(self):
         self.client.force_login(self.staff_user)
 
@@ -492,22 +515,22 @@ class DebugSidebarViewTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    @override_settings(ACTIVITY_DEBUG_SIDEBAR_ENABLED=True)
     def test_debug_sessions_forbidden_for_non_staff(self):
+        _enable_debug_sidebar()
         self.client.force_login(self.regular_user)
 
         response = self.client.get(reverse('activity:debug_sessions'))
 
         self.assertEqual(response.status_code, 403)
 
-    @override_settings(ACTIVITY_DEBUG_SIDEBAR_ENABLED=True)
     def test_debug_sessions_forbidden_for_anonymous(self):
+        _enable_debug_sidebar()
         response = self.client.get(reverse('activity:debug_sessions'))
 
         self.assertEqual(response.status_code, 403)
 
-    @override_settings(ACTIVITY_DEBUG_SIDEBAR_ENABLED=True)
     def test_debug_sessions_lists_recorded_sessions_for_staff(self):
+        _enable_debug_sidebar()
         PageEngagement.objects.create(
             user=self.staff_user, url='/dashboard/', session_key='session-a', visit_id='visit-1',
             started_at=timezone.now(),
@@ -521,15 +544,14 @@ class DebugSidebarViewTests(TestCase):
         self.assertContains(response, 'data-session-key="session-a"')
         self.assertContains(response, 'data-start-url="/dashboard/"')
 
-    @override_settings(ACTIVITY_DEBUG_SIDEBAR_ENABLED=True)
     def test_debug_session_steps_forbidden_for_non_staff(self):
+        _enable_debug_sidebar()
         self.client.force_login(self.regular_user)
 
         response = self.client.get(reverse('activity:debug_session_steps', args=['session-a']))
 
         self.assertEqual(response.status_code, 403)
 
-    @override_settings(ACTIVITY_DEBUG_SIDEBAR_ENABLED=False)
     def test_debug_session_steps_404_when_disabled(self):
         self.client.force_login(self.staff_user)
 
@@ -537,8 +559,8 @@ class DebugSidebarViewTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    @override_settings(ACTIVITY_DEBUG_SIDEBAR_ENABLED=True)
     def test_debug_session_steps_shows_ordered_steps_for_staff(self):
+        _enable_debug_sidebar()
         engagement = PageEngagement.objects.create(
             user=self.staff_user, url='/dashboard/', session_key='session-a', visit_id='visit-1',
             started_at=timezone.now(),

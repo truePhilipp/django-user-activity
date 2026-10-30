@@ -1,5 +1,7 @@
 from django.contrib import admin
-from .models import Activity, ElementInteraction, PageEngagement
+from solo.admin import SingletonModelAdmin
+
+from .models import Activity, ActivitySettings, ElementInteraction, PageEngagement
 
 # Register your models here.
 class ActivityAdmin(admin.ModelAdmin):
@@ -32,3 +34,6 @@ class ElementInteractionAdmin(admin.ModelAdmin):
     search_fields = ('xpath', 'value', 'engagement__url', 'engagement__user__username')
 
 admin.site.register(ElementInteraction, ElementInteractionAdmin)
+
+
+admin.site.register(ActivitySettings, SingletonModelAdmin)

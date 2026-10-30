@@ -47,11 +47,12 @@ You can install the `django-user-activity` app in your Django project using one 
    ```
 
 ## Configuration
-Add `activity` to your INSTALLED_APPS in your settings.py file:
+Add `activity` and `solo` ([django-solo](https://github.com/lazybird/django-solo), installed as a dependency) to your INSTALLED_APPS in your settings.py file:
 
  ```python
 INSTALLED_APPS = [
     ...
+    'solo',
     'activity',
     ...
 ]
@@ -101,6 +102,9 @@ Set either setting in `settings.py` to skip logging for certain requests. Both a
 ACTIVITY_USER_BLACKLIST = ['admin']           # skip requests from these users (matched on USERNAME_FIELD)
 ACTIVITY_PATH_PREFIX_BLACKLIST = ['/admin/']  # skip requests whose path starts with these prefixes
 ```
+
+## Debug Sidebar
+A sidebar for browsing recorded sessions, shown only to staff users. Add `activity.context_processors.debug_sidebar` to your template context processors, include `activity.urls` in your URLconf and `{% include "activity/debug_sidebar.html" %}` in your base template. It is off by default; turn it on under **Activity Settings** in the admin.
 
 ## Admin Interface
 You can view, filter, and search user activity data in the Django Admin Interface by visiting `/admin` path. Here, you will see `Activities` option in the left side. You will
